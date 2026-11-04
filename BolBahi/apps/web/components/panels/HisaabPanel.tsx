@@ -26,8 +26,23 @@ export function HisaabPanel({ onClose }: HisaabPanelProps) {
 
   const fetchSummary = async () => {
     setLoading(true);
-    const res = await apiFetch<DailySummaryData>('/api/stats/daily-summary');
-    if (res.ok) {
+    let res = await apiFetch<DailySummaryData>('/api/stats/daily-summary');
+    if (!res.ok || !res.data) {
+      const statsRes = await apiFetch<any>('/api/stats');
+      if (statsRes.ok && statsRes.data) {
+        res = {
+          ok: true,
+          data: {
+            todayIn: statsRes.data.todayIn || 0,
+            todayOut: statsRes.data.todayOut || 0,
+            net: statsRes.data.netToday || 0,
+            entryCount: ((statsRes.data.todayIn || 0) + (statsRes.data.todayOut || 0) > 0) ? 1 : 0,
+            timestamp: new Date().toISOString(),
+          },
+        };
+      }
+    }
+    if (res.ok && res.data) {
       setSummary(res.data);
     }
     setLoading(false);
