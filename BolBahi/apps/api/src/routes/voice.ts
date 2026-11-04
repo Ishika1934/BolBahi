@@ -16,7 +16,7 @@ import {
   executeShowView,
   ActionResult,
 } from '../services/executor.js';
-import { executeQueryBalance, executeDailySummary } from '../services/summary.js';
+import { executeQueryBalance, executeDailySummary, executeQueryCustomerInfo } from '../services/summary.js';
 import { executeUndoLast } from '../services/undo.js';
 import {
   enqueueSessionTask,
@@ -207,6 +207,8 @@ voiceRouter.post(
             resAction = await executeAddLowStock(shopId, groupId, action, validated.lang);
           } else if (action.type === 'query_balance') {
             resAction = await executeQueryBalance(shopId, action.customer, validated.lang);
+          } else if (action.type === 'query_customer_info') {
+            resAction = await executeQueryCustomerInfo(shopId, action.customer, (action as any).field || 'all', validated.lang);
           } else if (action.type === 'daily_summary') {
             resAction = await executeDailySummary(shopId, validated.lang);
           } else if (action.type === 'undo_last') {
