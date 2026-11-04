@@ -72,6 +72,7 @@ app.use('/api/events', eventsRouter);
 app.use('/api/commands', commandsRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/entries', entriesRouter);
+app.use('/api/records', entriesRouter);
 app.use('/api/stock', stockRouter);
 app.use('/api/reminders', remindersRouter);
 
@@ -82,8 +83,9 @@ app.use(errorHandler);
 async function start() {
   await connectDB();
   startReminderScheduler();
-  app.listen(env.PORT, () => {
-    console.log(`🚀 BolBahi API server listening on http://localhost:${env.PORT}`);
+  const host = '0.0.0.0';
+  app.listen(env.PORT, host, () => {
+    console.log(`🚀 BolBahi API server listening on http://${host}:${env.PORT}`);
   });
 }
 
