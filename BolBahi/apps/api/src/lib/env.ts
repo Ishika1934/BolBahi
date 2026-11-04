@@ -14,7 +14,7 @@ const envSchema = z.object({
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
 
   // Auth
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').default('bolbahi_default_jwt_secret_key_at_least_32_characters_12345'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   COOKIE_SECURE: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
 
