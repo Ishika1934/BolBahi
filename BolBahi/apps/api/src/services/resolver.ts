@@ -33,9 +33,44 @@ export async function resolveCustomer(
     return { matchType: 'not_found', cleanedName: cleaned };
   }
 
+  // 1b. Phone number match (if input contains digits matching a customer's phone)
+  const digits = rawName.replace(/\D/g, '');
+  if (digits.length >= 7) {
+    const phoneMatches = customers.filter(
+      (c) => c.phone && (c.phone.replace(/\D/g, '') === digits || c.phone.replace(/\D/g, '').endsWith(digits))
+    );
+    if (phoneMatches.length === 1) {
+      return { matchType: 'exact', customer: phoneMatches[0], cleanedName: phoneMatches[0].name };
+    }
+    if (phoneMatches.length > 1) {
+      return { matchType: 'ambiguous', candidates: phoneMatches, cleanedName: cleaned };
+    }
+  }
+
   const cleanedLower = cleaned.toLowerCase();
 
-  // 2. Exact name match (case-insensitive)
+  // 2. Single word name / first-name / alias resolution with ambiguity check
+  const isSingleWord = !cleaned.includes(' ');
+  if (isSingleWord) {
+    const candidateMatches = customers.filter((c) => {
+      const cLower = c.name.toLowerCase();
+      const cStripLower = stripHonorifics(c.name).toLowerCase();
+      const cFirst = cStripLower.split(' ')[0];
+      const hasAlias = c.aliases.some(
+        (a) => a.toLowerCase() === cleanedLower || stripHonorifics(a).toLowerCase() === cleanedLower
+      );
+      return cLower === cleanedLower || cStripLower === cleanedLower || cFirst === cleanedLower || hasAlias;
+    });
+
+    if (candidateMatches.length > 1) {
+      return { matchType: 'ambiguous', candidates: candidateMatches, cleanedName: cleaned };
+    }
+    if (candidateMatches.length === 1) {
+      return { matchType: 'exact', customer: candidateMatches[0], cleanedName: cleaned };
+    }
+  }
+
+  // 3. Exact full name match (case-insensitive)
   const exactMatches = customers.filter(
     (c) => c.name.toLowerCase() === cleanedLower || stripHonorifics(c.name).toLowerCase() === cleanedLower
   );
@@ -46,7 +81,7 @@ export async function resolveCustomer(
     return { matchType: 'ambiguous', candidates: exactMatches, cleanedName: cleaned };
   }
 
-  // 3. Exact alias match
+  // 4. Exact alias match
   const aliasMatches = customers.filter((c) =>
     c.aliases.some((a) => a.toLowerCase() === cleanedLower || stripHonorifics(a).toLowerCase() === cleanedLower)
   );
@@ -103,6 +138,21 @@ export async function resolveCustomer(
       candidates: [topMatch.item.customer, secondMatch.item.customer],
       cleanedName: cleaned,
     };
+  }
+
+  // Prevent surname-only false positives when first names are completely different
+  const inputWords = cleanedLower.split(/\s+/);
+  if (inputWords.length > 1) {
+    const candidateFirst = stripHonorifics(topMatch.item.customer.name).split(/\s+/)[0].toLowerCase();
+    const inputFirst = inputWords[0];
+    const candidateAliases = topMatch.item.customer.aliases.map((a) => a.toLowerCase());
+    const firstMatches =
+      candidateFirst === inputFirst ||
+      candidateAliases.some((a) => a.includes(inputFirst) || inputFirst.includes(a));
+
+    if (!firstMatches) {
+      return { matchType: 'not_found', cleanedName: cleaned };
+    }
   }
 
   return {
