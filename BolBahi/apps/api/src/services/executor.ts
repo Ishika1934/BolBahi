@@ -40,7 +40,10 @@ export async function executeAddUdhaar(
 
   if (resolved.matchType === 'ambiguous') {
     const candidateNames = resolved.candidates?.map((c) => c.name) || [];
-    const question = `Kaunsa ${resolved.cleanedName}? ${candidateNames.join(' ya ')}?`;
+    const question =
+      lang === 'hi-IN'
+        ? `दुकान में '${resolved.cleanedName}' नाम के कई ग्राहक हैं: ${candidateNames.join(' और ')}। कृपया पूरा नाम या फोन नंबर जैसे और विवरण बताएं।`
+        : `There are multiple customers named "${resolved.cleanedName}": ${candidateNames.join(' and ')}. Please tell me more details like full name or phone number.`;
     return {
       ok: false,
       type: 'add_udhaar',
@@ -108,7 +111,10 @@ export async function executeAddPayment(
 
   if (resolved.matchType === 'ambiguous') {
     const candidateNames = resolved.candidates?.map((c) => c.name) || [];
-    const question = `Kaunsa ${resolved.cleanedName}? ${candidateNames.join(' ya ')}?`;
+    const question =
+      lang === 'hi-IN'
+        ? `दुकान में '${resolved.cleanedName}' नाम के कई ग्राहक हैं: ${candidateNames.join(' और ')}। कृपया पूरा नाम या फोन नंबर जैसे और विवरण बताएं।`
+        : `There are multiple customers named "${resolved.cleanedName}": ${candidateNames.join(' and ')}. Please tell me more details like full name or phone number.`;
     return {
       ok: false,
       type: 'add_payment',
@@ -201,7 +207,10 @@ export async function executeSetReminder(
 
   if (resolved.matchType === 'ambiguous') {
     const candidateNames = resolved.candidates?.map((c) => c.name) || [];
-    const question = `Kaunsa ${resolved.cleanedName}? ${candidateNames.join(' ya ')}?`;
+    const question =
+      lang === 'hi-IN'
+        ? `दुकान में '${resolved.cleanedName}' नाम के कई ग्राहक हैं: ${candidateNames.join(' और ')}। कृपया पूरा नाम या फोन नंबर जैसे और विवरण बताएं।`
+        : `There are multiple customers named "${resolved.cleanedName}": ${candidateNames.join(' and ')}. Please tell me more details like full name or phone number.`;
     return {
       ok: false,
       type: 'set_reminder',
@@ -285,7 +294,130 @@ export async function executeSetReminder(
   };
 }
 
-// 4. ADD LOW STOCK
+// 4. ADD LOW STOCK & INTELLIGENT QUANTITY MERGING
+const KIRANA_SYNONYMS: Record<string, string[]> = {
+  cheeni: ['cheeni', 'chini', 'shakkar', 'sugar', 'चीनी', 'शक्कर', 'साकर'],
+  atta: ['atta', 'aata', 'gehu atta', 'flour', 'wheat flour', 'आटा', 'गेहूं आटा'],
+  tel: ['tel', 'tail', 'sarson tel', 'sarso tel', 'oil', 'mustard oil', 'refined tel', 'refined oil', 'तेल', 'सरसों तेल'],
+  chawal: ['chawal', 'rice', 'basmati', 'चावल'],
+  dal: ['dal', 'daal', 'toor dal', 'arhar dal', 'moong dal', 'chana dal', 'masoor dal', 'दाल'],
+  doodh: ['doodh', 'dudh', 'milk', 'दूध'],
+  namak: ['namak', 'salt', 'tata namak', 'नमक'],
+  chai: ['chai', 'chai patti', 'tea', 'chay', 'चाय', 'चाय पत्ती'],
+  biscuit: ['biscuit', 'biscuits', 'parle g', 'बिस्कुट', 'बिस्किट'],
+  sabun: ['sabun', 'soap', 'surf', 'detergent', 'साबुन'],
+  masala: ['masala', 'haldi', 'mirch', 'dhaniya', 'मसाला'],
+};
+
+function normalizeUnit(unitStr: string): string {
+  const u = unitStr.toLowerCase().trim();
+  if (['kg', 'kgs', 'kilo', 'kilos', 'किग्रा', 'किलो'].includes(u)) return 'kg';
+  if (['g', 'gm', 'gms', 'gram', 'grams', 'ग्राम'].includes(u)) return 'g';
+  if (['l', 'ltr', 'ltrs', 'litre', 'litres', 'liter', 'liters', 'लीटर'].includes(u)) return 'liter';
+  if (['ml', 'मिली'].includes(u)) return 'ml';
+  if (['packet', 'pkt', 'packets', 'पैकेट'].includes(u)) return 'packet';
+  if (['bori', 'bag', 'bags', 'बोरी'].includes(u)) return 'bori';
+  if (['piece', 'pc', 'pcs', 'नग'].includes(u)) return 'piece';
+  if (['box', 'peti', 'पेटी', 'डिब्बा'].includes(u)) return 'box';
+  return u;
+}
+
+function parseQuantityAndUnit(text?: string): { num: number; unit: string } | null {
+  if (!text) return null;
+  const clean = text.trim().toLowerCase();
+
+  let numVal: number | null = null;
+  if (clean.includes('aadha') || clean.includes('आधा')) numVal = 0.5;
+  else if (clean.includes('dedh') || clean.includes('डेढ़')) numVal = 1.5;
+  else if (clean.includes('dhai') || clean.includes('ढाई')) numVal = 2.5;
+
+  const match = clean.match(/(\d+(?:\.\d+)?)\s*([a-zA-Z\u0900-\u097F]*)/);
+  if (match) {
+    numVal = parseFloat(match[1]);
+    const unitPart = match[2].trim();
+    return { num: numVal, unit: normalizeUnit(unitPart) };
+  } else if (numVal !== null) {
+    const unitPart = clean.replace(/(?:aadha|dedh|dhai|आधा|डेढ़|ढाई)/gi, '').trim();
+    return { num: numVal, unit: normalizeUnit(unitPart) };
+  }
+
+  return null;
+}
+
+export function mergeStockQuantities(existingHint?: string, incomingHint?: string): string {
+  if (!existingHint) return incomingHint || '';
+  if (!incomingHint) return existingHint;
+
+  const p1 = parseQuantityAndUnit(existingHint);
+  const p2 = parseQuantityAndUnit(incomingHint);
+
+  if (p1 && p2) {
+    if (p1.unit === p2.unit) {
+      const sum = Math.round((p1.num + p2.num) * 100) / 100;
+      return p1.unit ? `${sum} ${p1.unit}` : `${sum}`;
+    }
+    if (p1.unit === 'kg' && p2.unit === 'g') {
+      const sum = Math.round((p1.num + p2.num / 1000) * 100) / 100;
+      return `${sum} kg`;
+    }
+    if (p1.unit === 'g' && p2.unit === 'kg') {
+      const sum = Math.round((p1.num + p2.num * 1000) * 100) / 100;
+      return `${sum} g`;
+    }
+    if (p1.unit === 'liter' && p2.unit === 'ml') {
+      const sum = Math.round((p1.num + p2.num / 1000) * 100) / 100;
+      return `${sum} liter`;
+    }
+    if (p1.unit === 'ml' && p2.unit === 'liter') {
+      const sum = Math.round((p1.num + p2.num * 1000) * 100) / 100;
+      return `${sum} ml`;
+    }
+    if (!p1.unit && p2.unit) {
+      return `${p1.num + p2.num} ${p2.unit}`;
+    }
+    if (p1.unit && !p2.unit) {
+      return `${p1.num + p2.num} ${p1.unit}`;
+    }
+    return `${existingHint} + ${incomingHint}`;
+  }
+
+  return incomingHint || existingHint;
+}
+
+async function findMatchingStockItem(shopId: Types.ObjectId, cleanItem: string) {
+  const allItems = await StockItem.find({ shopId });
+  if (allItems.length === 0) return null;
+
+  const itemLower = cleanItem.toLowerCase();
+
+  // 1. Direct name match
+  const exact = allItems.find((i) => i.name.toLowerCase() === itemLower);
+  if (exact) return exact;
+
+  // 2. Synonyms match (e.g. cheeni, chini, sugar)
+  for (const [key, synList] of Object.entries(KIRANA_SYNONYMS)) {
+    const incomingMatches = synList.some(
+      (syn) => syn === itemLower || itemLower.includes(syn) || syn.includes(itemLower)
+    );
+    if (incomingMatches) {
+      const existingMatch = allItems.find((i) => {
+        const iLower = i.name.toLowerCase();
+        return synList.some((syn) => syn === iLower || iLower.includes(syn) || syn.includes(iLower));
+      });
+      if (existingMatch) return existingMatch;
+    }
+  }
+
+  // 3. Substring match
+  const substringMatch = allItems.find((i) => {
+    const iLower = i.name.toLowerCase();
+    return iLower.includes(itemLower) || itemLower.includes(iLower);
+  });
+  if (substringMatch) return substringMatch;
+
+  return null;
+}
+
 export async function executeAddLowStock(
   shopId: string,
   groupId: string,
@@ -295,15 +427,14 @@ export async function executeAddLowStock(
   const sId = new Types.ObjectId(shopId);
   const cleanItem = action.item.trim();
 
-  // Upsert or create stock item
-  let stockItem = await StockItem.findOne({
-    shopId: sId,
-    name: { $regex: new RegExp(`^${cleanItem}$`, 'i') },
-  });
+  // Find matching existing or similar item
+  let stockItem = await findMatchingStockItem(sId, cleanItem);
+  let isMerged = false;
 
   if (stockItem) {
+    isMerged = true;
     stockItem.status = 'low';
-    if (action.quantityHint) stockItem.quantityHint = action.quantityHint;
+    stockItem.quantityHint = mergeStockQuantities(stockItem.quantityHint, action.quantityHint);
     stockItem.groupId = groupId;
     await stockItem.save();
   } else {
@@ -316,19 +447,37 @@ export async function executeAddLowStock(
     });
   }
 
-  const reply = buildStockReply(cleanItem, action.quantityHint, lang);
+  emitShopEvent(shopId, 'stock.updated', { id: stockItem._id.toString() });
+
+  const isEn = lang === 'en-IN';
+  let replyScreen = '';
+  let replySpeech = '';
+
+  if (isMerged && action.quantityHint) {
+    replyScreen = isEn
+      ? `${stockItem.name}: Added ${action.quantityHint} (Total: ${stockItem.quantityHint}).`
+      : `${stockItem.name}: ${action.quantityHint} और जोड़ा गया। कुल अब: ${stockItem.quantityHint}।`;
+    replySpeech = isEn
+      ? `Added ${action.quantityHint} to ${stockItem.name}. Total is now ${stockItem.quantityHint} in low stock.`
+      : `हो गया। ${stockItem.name} में ${action.quantityHint} और जोड़ दिया गया, अब कुल ${stockItem.quantityHint} स्टॉक कम है।`;
+  } else {
+    const baseReply = buildStockReply(stockItem.name, stockItem.quantityHint, lang);
+    replyScreen = baseReply.screen;
+    replySpeech = baseReply.speech;
+  }
 
   return {
     ok: true,
     type: 'add_low_stock',
-    summary: `${stockItem.name}: Low stock alert (${stockItem.quantityHint || 'Kam hai'})`,
-    spokenPart: reply.speech,
+    summary: `${stockItem.name}: Low stock (${stockItem.quantityHint || 'Kam hai'})`,
+    spokenPart: replySpeech,
     data: {
       stockId: stockItem._id.toString(),
       item: stockItem.name,
       quantityHint: stockItem.quantityHint,
-      replyScreen: reply.screen,
-      replySpeech: reply.speech,
+      isMerged,
+      replyScreen,
+      replySpeech,
     },
   };
 }
@@ -337,14 +486,17 @@ export async function executeAddLowStock(
 export async function executeUpdateCustomer(
   shopId: string,
   groupId: string,
-  action: { customer: string; newName: string; phone?: string; email?: string },
+  action: { customer: string; newName?: string; phone?: string; email?: string },
   lang: 'hi-IN' | 'en-IN' = 'hi-IN'
 ): Promise<ActionResult> {
   const resolved = await resolveCustomer(shopId, action.customer);
 
   if (resolved.matchType === 'ambiguous') {
     const candidateNames = resolved.candidates?.map((c) => c.name) || [];
-    const question = `Kaunsa ${resolved.cleanedName}? ${candidateNames.join(' ya ')}?`;
+    const question =
+      lang === 'hi-IN'
+        ? `दुकान में '${resolved.cleanedName}' नाम के कई ग्राहक हैं: ${candidateNames.join(' और ')}। कृपया पूरा नाम या फोन नंबर जैसे और विवरण बताएं।`
+        : `There are multiple customers named "${resolved.cleanedName}": ${candidateNames.join(' and ')}. Please tell me more details like full name or phone number.`;
     return {
       ok: false,
       type: 'update_customer',
@@ -365,22 +517,35 @@ export async function executeUpdateCustomer(
       needsClarification: true,
       clarificationQuestion:
         lang === 'hi-IN'
-          ? `ग्राहक "${action.customer}" नहीं मिला। किसका नाम बदलना है?`
-          : `Customer "${action.customer}" not found. Whose name should be updated?`,
+          ? `ग्राहक "${action.customer}" नहीं मिला। किस ग्राहक की जानकारी बदलनी है?`
+          : `Customer "${action.customer}" not found. Whose details should be updated?`,
       error: 'NOT_FOUND',
     };
   }
 
   const oldName = customer.name;
-  const newName = action.newName.trim();
+  let newName = oldName;
+  const updatesMade: string[] = [];
 
-  // Keep old name in aliases so historical lookups and notes remain intact
-  if (!customer.aliases.includes(oldName)) {
-    customer.aliases.push(oldName);
+  if (action.newName && action.newName.trim() && action.newName.trim() !== oldName) {
+    newName = action.newName.trim();
+    if (!customer.aliases.includes(oldName)) {
+      customer.aliases.push(oldName);
+    }
+    customer.name = newName;
+    updatesMade.push(lang === 'hi-IN' ? `नाम बदलकर ${newName}` : `name to ${newName}`);
   }
-  customer.name = newName;
-  if (action.phone) customer.phone = action.phone.trim();
-  if (action.email) customer.email = action.email.trim();
+
+  if (action.phone !== undefined && action.phone.trim()) {
+    customer.phone = action.phone.trim();
+    updatesMade.push(lang === 'hi-IN' ? `फोन नंबर ${customer.phone}` : `phone to ${customer.phone}`);
+  }
+
+  if (action.email !== undefined && action.email.trim()) {
+    customer.email = action.email.trim();
+    updatesMade.push(lang === 'hi-IN' ? `ईमेल ${customer.email}` : `email to ${customer.email}`);
+  }
+
   await customer.save();
 
   emitShopEvent(shopId, 'ledger.updated', {
@@ -389,23 +554,24 @@ export async function executeUpdateCustomer(
 
   const replyScreen =
     lang === 'hi-IN'
-      ? `हो गया। ${oldName} का नाम बदलकर ${newName} कर दिया गया।`
-      : `Updated customer name to ${newName}.`;
+      ? `हो गया। ${customer.name} का विवरण (${updatesMade.join(', ') || 'सहेजा गया'}) अपडेट कर दिया गया।`
+      : `Updated ${customer.name}'s details (${updatesMade.join(', ') || 'saved'}).`;
   const replySpeech =
     lang === 'hi-IN'
-      ? `हो गया। नाम बदलकर ${newName} कर दिया गया।`
-      : `Updated customer name to ${newName}.`;
+      ? `हो गया। ${customer.name} की जानकारी दर्ज कर दी गई।`
+      : `Updated ${customer.name}'s details.`;
 
   return {
     ok: true,
     type: 'update_customer',
-    summary: `${oldName} → ${newName}`,
+    summary: `${oldName} ${updatesMade.length > 0 ? `(${updatesMade.join(', ')})` : ''}`,
     spokenPart: replySpeech,
     data: {
       customerId: customer._id.toString(),
       oldName,
       newName,
       phone: customer.phone,
+      email: customer.email,
       replyScreen,
       replySpeech,
     },
