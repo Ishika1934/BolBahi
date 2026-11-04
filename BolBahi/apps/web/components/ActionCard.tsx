@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownLeft, Bell, Package, Check, AlertCircle, HelpCircle, Mail, Eye, User } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Bell, Package, Check, AlertCircle, HelpCircle, Mail, Eye, User, Phone, Wallet } from 'lucide-react';
 
 export interface ActionCardData {
   type: string;
@@ -67,6 +67,22 @@ export function ActionCard({ action, index }: ActionCardProps) {
           badgeText: 'text-[#E8731A]',
           icon: <User className="w-5 h-5 text-[#E8731A]" />,
           label: 'नाम सुधार (Rename)',
+        };
+      case 'query_customer_info':
+        return {
+          barColor: 'bg-[#0284C7]',
+          badgeBg: 'bg-[#E0F2FE]',
+          badgeText: 'text-[#0284C7]',
+          icon: <Phone className="w-5 h-5 text-[#0284C7]" />,
+          label: 'संपर्क जानकारी (Contact Info)',
+        };
+      case 'query_balance':
+        return {
+          barColor: 'bg-[#0D9488]',
+          badgeBg: 'bg-[#CCFBF1]',
+          badgeText: 'text-[#0D9488]',
+          icon: <Wallet className="w-5 h-5 text-[#0D9488]" />,
+          label: 'खाता हिसाब (Balance)',
         };
       case 'clarify':
         return {
