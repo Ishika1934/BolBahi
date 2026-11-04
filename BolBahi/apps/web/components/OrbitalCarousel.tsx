@@ -10,8 +10,6 @@ import {
   BarChart3,
   Package,
   Bell,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
   X,
   Volume2,
@@ -64,6 +62,8 @@ function OrbitGlassOrb({
   handleMicEnd,
   onOpen,
   onSelect,
+  onMoveForward,
+  onMoveBackward,
   t,
   currentLang,
 }: {
@@ -78,6 +78,8 @@ function OrbitGlassOrb({
   handleMicEnd: () => void;
   onOpen: () => void;
   onSelect: () => void;
+  onMoveForward: () => void;
+  onMoveBackward: () => void;
   t: (typeof TRANSLATIONS)[AppLanguage];
   currentLang: AppLanguage;
 }) {
@@ -105,13 +107,15 @@ function OrbitGlassOrb({
     return 0;
   });
   const zIndex = useTransform(theta, (th: number) => Math.round((Math.cos(th) + 1) * 40) + 10);
-  const pointerEvents = useTransform(d, (val: number) => (Math.abs(val) <= 1.4 ? 'auto' : 'none'));
+  const pointerEvents = useTransform(d, (val: number) => (Math.abs(val) <= 2.2 ? 'auto' : 'none'));
 
   const [isFront, setIsFront] = useState(index === 0);
+  const [dVal, setDVal] = useState(0);
 
   useEffect(() => {
     const unsub = d.on('change', (val) => {
-      setIsFront(Math.abs(val) < 0.5);
+      setDVal(val);
+      setIsFront(Math.abs(val) < 0.45);
     });
     return unsub;
   }, [d]);
@@ -131,7 +135,8 @@ function OrbitGlassOrb({
         transformStyle: 'preserve-3d',
       }}
       onClick={(e) => {
-        if (!isFront) {
+        const currentDiff = d.get();
+        if (Math.abs(currentDiff) > 0.4) {
           e.stopPropagation();
           onSelect();
         } else if (tile.id !== 'mic') {
@@ -237,11 +242,12 @@ function OrbitGlassOrb({
       ) : (
         /* 2. NEIGHBOR ORBS (Glassmorphic Spheres in 3D Perspective) */
         <motion.div
-          whileHover={{ scale: 1.08 }}
-          className="flex flex-col items-center gap-2 group cursor-pointer"
+          whileHover={{ scale: 1.12 }}
+          whileTap={{ scale: 0.94 }}
+          className="flex flex-col items-center gap-2 group cursor-pointer transition-transform"
         >
           <div
-            className="w-28 h-28 sm:w-32 sm:h-32 rounded-full relative flex items-center justify-center backdrop-blur-xl border border-white/80 shadow-lg transition-all group-hover:border-white"
+            className="w-28 h-28 sm:w-32 sm:h-32 rounded-full relative flex items-center justify-center backdrop-blur-xl border border-white/80 shadow-lg transition-all group-hover:border-white group-hover:shadow-2xl"
             style={{
               background: tile.orbBg,
               boxShadow: `0 14px 35px -8px ${tile.orbGlow}, 0 0 0 1px rgba(255,255,255,0.7) inset`,
@@ -249,13 +255,18 @@ function OrbitGlassOrb({
           >
             {/* Specular sheen */}
             <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/60 via-transparent to-black/5 pointer-events-none" />
-            <div className="relative z-10 opacity-90 group-hover:opacity-100">
+            <div className="relative z-10 opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all">
               {tile.icon}
+            </div>
+
+            {/* Hover direction pill hint on laptop */}
+            <div className="absolute -bottom-3 opacity-0 group-hover:opacity-100 transition-opacity z-20 px-2.5 py-0.5 rounded-full bg-black/80 text-white text-[10px] font-bold shadow-md whitespace-nowrap pointer-events-none">
+              {dVal > 0 ? (isEn ? 'Next →' : 'आगे →') : (isEn ? '← Prev' : '← पीछे')}
             </div>
           </div>
 
           {/* Mini Glass Label Pill */}
-          <div className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/80 shadow-xs text-xs font-bold text-[#1F1B16] truncate max-w-[140px] text-center">
+          <div className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/80 shadow-xs text-xs font-bold text-[#1F1B16] truncate max-w-[140px] text-center group-hover:bg-white group-hover:shadow-md transition-all">
             {tile.label}
           </div>
         </motion.div>
@@ -464,7 +475,8 @@ export function OrbitalCarousel() {
   const navigateTo = useCallback(
     (targetIdx: number) => {
       const currentP = pVal.get();
-      let diff = (targetIdx - (currentP % N)) % N;
+      const currentNorm = (((currentP % N) + N) % N);
+      let diff = (targetIdx - currentNorm) % N;
       if (diff < -N / 2) diff += N;
       if (diff > N / 2) diff -= N;
       const targetP = currentP + diff;
@@ -1004,7 +1016,18 @@ export function OrbitalCarousel() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="relative w-full max-w-4xl h-[440px] sm:h-[490px] flex items-center justify-center touch-pan-y"
+        onClick={(e) => {
+          if (openPanel) return;
+          // Click on left/right background flank rotates previous/next
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          if (clickX > rect.width * 0.72) {
+            handleArrow('next');
+          } else if (clickX < rect.width * 0.28) {
+            handleArrow('prev');
+          }
+        }}
+        className="relative w-full max-w-4xl h-[440px] sm:h-[490px] flex items-center justify-center touch-pan-y select-none cursor-default"
         style={{
           perspective: 1100,
           perspectiveOrigin: '50% 50%',
@@ -1027,19 +1050,7 @@ export function OrbitalCarousel() {
           <div className="absolute inset-2 rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(232,115,26,0.12)_0%,rgba(255,255,255,0.06)_50%,transparent_75%)]" />
         </div>
 
-        {/* Left Arrow Button (hidden when panel is open) */}
-        {!openPanel && (
-          <button
-            type="button"
-            onClick={() => handleArrow('prev')}
-            aria-label={t.prev}
-            className="absolute left-1 sm:left-4 z-40 w-14 h-14 sm:w-16 sm:h-16 rounded-full glass flex items-center justify-center shadow-xl text-[#1F1B16] hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white"
-          >
-            <ChevronLeft className="w-7 h-7 text-[#1F1B16]" />
-          </button>
-        )}
-
-        {/* Render 7 Glassmorphic Icon Orbs in 3D Space (No Cards) */}
+        {/* Render 7 Glassmorphic Icon Orbs in 3D Space (Click forward item to move forward, previous item to move backward) */}
         {tiles.map((tile, i) => (
           <OrbitGlassOrb
             key={tile.id}
@@ -1054,22 +1065,12 @@ export function OrbitalCarousel() {
             handleMicEnd={handleMicEnd}
             onOpen={() => setOpenPanel(tile.id)}
             onSelect={() => navigateTo(i)}
+            onMoveForward={() => handleArrow('next')}
+            onMoveBackward={() => handleArrow('prev')}
             t={t}
             currentLang={currentLang}
           />
         ))}
-
-        {/* Right Arrow Button (hidden when panel is open) */}
-        {!openPanel && (
-          <button
-            type="button"
-            onClick={() => handleArrow('next')}
-            aria-label={t.next}
-            className="absolute right-1 sm:right-4 z-40 w-14 h-14 sm:w-16 sm:h-16 rounded-full glass flex items-center justify-center shadow-xl text-[#1F1B16] hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white"
-          >
-            <ChevronRight className="w-7 h-7 text-[#1F1B16]" />
-          </button>
-        )}
       </div>
 
       {/* Under Orbit: Position indicator & Latest Activity Strip */}
