@@ -18,10 +18,42 @@ stockRouter.get('/', requireAuth, async (req: Request, res: Response, next: Next
       data: items.map((i) => ({
         id: i._id.toString(),
         name: i.name,
-        quantityHint: i.quantityHint,
+        item: i.name,
+        quantityHint: i.quantityHint || 'कम स्टॉक',
+        qty: i.quantityHint || 'कम',
+        unit: '',
+        threshold: 'कम स्टॉक',
         status: i.status,
         groupId: i.groupId,
         createdAt: i.createdAt,
+        updatedAt: i.updatedAt,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/stock/low
+stockRouter.get('/low', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sId = new Types.ObjectId(req.shopId!);
+    const items = await StockItem.find({ shopId: sId, status: 'low' }).sort({ createdAt: -1 });
+
+    res.json({
+      ok: true,
+      data: items.map((i) => ({
+        id: i._id.toString(),
+        name: i.name,
+        item: i.name,
+        quantityHint: i.quantityHint || 'कम स्टॉक',
+        qty: i.quantityHint || 'कम',
+        unit: '',
+        threshold: 'कम स्टॉक',
+        status: i.status,
+        groupId: i.groupId,
+        createdAt: i.createdAt,
+        updatedAt: i.updatedAt,
       })),
     });
   } catch (err) {
