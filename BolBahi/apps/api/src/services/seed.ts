@@ -142,9 +142,38 @@ export async function seedDemoDataForShop(shopId: string) {
     createdStockItems.push({ id: item._id.toString(), name: item.name, status: item.status });
   }
 
+  // 5. Create sample reminders
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(10, 0, 0, 0);
+
+  let reminderCount = 0;
+  if (createdCustomers.length >= 2) {
+    await Reminder.create({
+      shopId: sId,
+      customerId: new Types.ObjectId(createdCustomers[0].id),
+      message: `${createdCustomers[0].name} ko udhaar wapsi ka tagada`,
+      channel: 'email',
+      sendAt: tomorrow,
+      status: 'pending',
+      groupId: seedGroupId,
+    });
+    await Reminder.create({
+      shopId: sId,
+      customerId: new Types.ObjectId(createdCustomers[1].id),
+      message: `${createdCustomers[1].name} ko bahi khata hisaab reminder`,
+      channel: 'email',
+      sendAt: tomorrow,
+      status: 'pending',
+      groupId: seedGroupId,
+    });
+    reminderCount = 2;
+  }
+
   return {
     customerCount: createdCustomers.length,
     stockCount: createdStockItems.length,
+    reminderCount,
     customers: createdCustomers,
     stockItems: createdStockItems,
   };
