@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+
+@theme {
+  --font-sans: var(--font-jakarta), var(--font-mukta), var(--font-noto), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-poppins), var(--font-mukta), sans-serif;
+  --font-devanagari: var(--font-mukta), var(--font-noto), sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  --bg: #FBF7F0;
+  --surface: #FFFFFF;
+  --ink: #1F1B16;
+  --muted: #8A7F72;
+  --line: #E9E2D6;
+  --brand: #E8731A;
+  --brand-ink: #FFFFFF;
+  --brand-soft: #FDEBDA;
+  --owed: #C23B22;
+  --owed-soft: #FBE6E1;
+  --received: #1F7A4D;
+  --received-soft: #E2F3E9;
+  --attention: #B7791F;
+  --attention-soft: #FBF0D9;
+  --system: #2B6CB0;
+  --system-soft: #E3EEF9;
+  --radius-card: 16px;
+  --radius-tile: 28px;
+  --radius-pill: 999px;
+  --shadow-card: 0 4px 20px rgba(31, 27, 22, 0.06);
+  --shadow-mic: 0 10px 30px rgba(232, 115, 26, 0.35);
+
+  --backdrop:
+    radial-gradient(60% 50% at 15% 10%, #FFD9B0 0%, transparent 60%),
+    radial-gradient(50% 45% at 90% 20%, #BFE6D0 0%, transparent 60%),
+    radial-gradient(55% 50% at 70% 95%, #F6C6B8 0%, transparent 60%),
+    #FBF7F0;
+  --glass-bg: rgba(255, 255, 255, 0.60);
+  --glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 8px 32px rgba(31, 27, 22, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-blur: 18px;
+}
+
+body {
+  background: var(--backdrop);
+  background-attachment: fixed;
+  color: var(--ink);
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-jakarta), var(--font-mukta), var(--font-noto), system-ui, -apple-system, sans-serif;
+  font-feature-settings: "tnum" 1, "cv05" 1;
+  letter-spacing: -0.012em;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-poppins), var(--font-mukta), sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+.stat-number {
+  font-family: var(--font-poppins), var(--font-jakarta), sans-serif;
+  font-feature-settings: "tnum" 1, "cv05" 1;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-tile);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-tile);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.80);
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-card);
+}
+
+.glass-pill {
+  background: rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-pill);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: var(--glass-bg-strong); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background: #FFFFFF; backdrop-filter: none; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
