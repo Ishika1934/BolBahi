@@ -2,39 +2,45 @@
 
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '@/lib/api';
-import { ArrowLeft, Bell, Mail, Clock, CheckCircle, XCircle, X } from 'lucide-react';
+import { ArrowLeft, Package, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
-interface ReminderItem {
+interface LowStockItem {
   id: string;
-  customerId: string;
-  customerName: string;
-  customerPhone?: string;
-  customerEmail?: string;
-  message: string;
-  channel: string;
-  sendAt: string;
-  status: 'pending' | 'sent' | 'failed' | 'cancelled';
-  createdAt: string;
+  name?: string;
+  item?: string;
+  quantityHint?: string;
+  qty?: number | string;
+  unit?: string;
+  threshold?: number | string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-interface RemindersPanelProps {
+interface StockPanelProps {
   onClose: () => void;
 }
 
-export function RemindersPanel({ onClose }: RemindersPanelProps) {
+export function StockPanel({ onClose }: StockPanelProps) {
   const { language } = useAuth();
   const isEn = language === 'en-IN';
 
-  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [items, setItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
 
-  const fetchReminders = async () => {
+  const fetchItems = async () => {
     setLoading(true);
-    const res = await apiFetch<ReminderItem[]>('/api/reminders');
+    const res = await apiFetch<LowStockItem[]>('/api/stock/low');
     if (res.ok && Array.isArray(res.data)) {
-      setReminders(res.data);
+      setItems(res.data);
+    } else {
+      // Fallback to /api/stock
+      const fallback = await apiFetch<LowStockItem[]>('/api/stock');
+      if (fallback.ok && Array.isArray(fallback.data)) {
+        setItems(fallback.data.filter((i) => i.status === 'low'));
+      }
     }
     setLoading(false);
   };
@@ -44,7 +50,7 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
     try {
       const res = await apiFetch('/api/demo/seed', { method: 'POST' });
       if (res.ok) {
-        await fetchReminders();
+        await fetchItems();
       }
     } finally {
       setSeeding(false);
@@ -52,24 +58,13 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
   };
 
   useEffect(() => {
-    fetchReminders();
+    fetchItems();
   }, []);
 
-  const cancelReminder = async (id: string) => {
-    const res = await apiFetch(`/api/reminders/${id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setReminders(
-        reminders.map((r) => (r.id === id ? { ...r, status: 'cancelled' } : r))
-      );
-    }
-  };
-
-  const pendingCount = reminders.filter((r) => r.status === 'pending').length;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FBF7F0] backdrop-blur-2xl flex flex-col w-screen h-screen">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FBF7F0] flex flex-col w-screen h-screen">
       {/* Full-width Sticky Header */}
-      <div className="sticky top-0 z-20 w-full bg-white/85 backdrop-blur-xl border-b border-[#E9E2D6] px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
+      <div className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-xl border-b border-[#E9E2D6] px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
         <button
           onClick={onClose}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs sm:text-sm font-bold bg-white hover:bg-[#FBF7F0] text-[#1F1B16] border border-[#E9E2D6] shadow-xs transition-all active:scale-95 cursor-pointer"
@@ -79,8 +74,8 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
         </button>
 
         <h2 className="text-lg sm:text-xl font-extrabold text-[#1F1B16] flex items-center gap-2">
-          <Bell className="w-5 h-5 text-[#2B6CB0]" />
-          <span>{isEn ? 'Payment Reminders' : 'रिमाइंडर'}</span>
+          <Package className="w-5 h-5 text-[#B7791F]" />
+          <span>{isEn ? 'Stock Alerts' : 'स्टॉक अलर्ट'}</span>
         </h2>
 
         <button
@@ -93,42 +88,39 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
 
       {/* Main Panel Content Container */}
       <div className="w-full max-w-2xl mx-auto p-4 sm:p-6 flex-1 flex flex-col pb-24">
-        {/* Summary Banner */}
-        <div className="glass-card p-4 sm:p-5 mb-5 flex items-center justify-between border border-white shadow-md">
+        {/* Summary Card */}
+        <div className="glass-card p-4 mb-4 flex items-center justify-between border border-white shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#2B6CB0]/15 text-[#2B6CB0] flex items-center justify-center shadow-xs">
-              <Bell className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-[#FBF0D9] text-[#B7791F] flex items-center justify-center font-bold">
+              <AlertCircle className="w-5 h-5" />
             </div>
             <div>
               <div className="text-xs font-bold text-[#8A7F72] uppercase tracking-wider">
-                {isEn ? 'Pending Reminders' : 'बाकी रिमाइंडर'}
+                {isEn ? 'Low Stock Count' : 'कम स्टॉक वाली वस्तुएं'}
               </div>
-              <div className="text-2xl font-black text-[#2B6CB0] mt-0.5">
-                {pendingCount} {isEn ? 'pending' : 'बाकी हैं'}
+              <div className="text-2xl font-black text-[#B7791F] mt-0.5">
+                {items.length} {isEn ? 'items running low' : 'वस्तुएं कम हैं'}
               </div>
             </div>
-          </div>
-          <div className="text-xs text-[#8A7F72] text-right font-semibold">
-            {isEn ? 'Automated Email Reminders' : 'ऑटोमेटेड ईमेल तगादा'}
           </div>
         </div>
 
-        {/* Reminders List */}
-        <div className="flex-1 flex flex-col gap-3">
+        {/* Items List */}
+        <div className="flex-1 flex flex-col gap-2.5">
           {loading ? (
-            <div className="text-center py-16 text-[#8A7F72] text-sm font-semibold">
-              {isEn ? 'Loading reminders...' : 'लोड हो रहा है...'}
+            <div className="text-center py-16 text-[#8A7F72] text-sm font-medium">
+              {isEn ? 'Loading stock alerts...' : 'स्टॉक अलर्ट लोड हो रहे हैं...'}
             </div>
-          ) : reminders.length === 0 ? (
-            <div className="glass-card p-10 text-center text-[#8A7F72] border border-white">
-              <Bell className="w-8 h-8 text-[#8A7F72]/40 mx-auto mb-2" />
+          ) : items.length === 0 ? (
+            <div className="glass-card p-8 text-center text-[#8A7F72]">
+              <CheckCircle2 className="w-10 h-10 text-[#1F7A4D] mx-auto mb-2 opacity-80" />
               <p className="font-bold text-base text-[#1F1B16]">
-                {isEn ? 'No reminders scheduled.' : 'कोई रिमाइंडर निर्धारित नहीं है।'}
+                {isEn ? 'No low stock alerts right now!' : 'दुकान में कोई सामान कम नहीं है!'}
               </p>
-              <p className="text-xs mt-1 mb-4 text-[#8A7F72]">
+              <p className="text-xs mt-1 mb-4">
                 {isEn
-                  ? 'Speak: "Remind Ramesh tomorrow" or load sample kirana reminders'
-                  : 'बोलें: "कल रमेश को याद दिला देना" या सैंपल रिमाइंडर लोड करें'}
+                  ? 'Say: "Atta 5 kilo kam hai" or load sample kirana data'
+                  : 'बोलें: "आटा 5 किलो कम है" या सैंपल डेटा लोड करें'}
               </p>
               <button
                 type="button"
@@ -140,79 +132,28 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
               </button>
             </div>
           ) : (
-            reminders.map((rem) => {
-              const isPending = rem.status === 'pending';
-              const isSent = rem.status === 'sent';
-              const sendAtStr = new Date(rem.sendAt).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-
-              return (
-                <div
-                  key={rem.id}
-                  className="glass-card p-4 flex flex-col gap-2.5 border border-white shadow-sm hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-base text-[#1F1B16]">
-                        {rem.customerName}
-                      </span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
-                          isPending
-                            ? 'bg-[#EEF2FF] text-[#4F46E5] border border-[#4F46E5]/20'
-                            : isSent
-                            ? 'bg-[#E2F3E9] text-[#1F7A4D] border border-[#1F7A4D]/20'
-                            : 'bg-[#FBE6E1] text-[#C23B22] border border-[#C23B22]/20'
-                        }`}
-                      >
-                        {rem.status === 'pending'
-                          ? isEn
-                            ? 'Pending'
-                            : 'बाकी'
-                          : rem.status === 'sent'
-                          ? isEn
-                            ? 'Sent'
-                            : 'भेजा गया'
-                          : isEn
-                          ? 'Cancelled'
-                          : 'रद्द'}
-                      </span>
-                    </div>
-
-                    {isPending && (
-                      <button
-                        type="button"
-                        onClick={() => cancelReminder(rem.id)}
-                        className="text-xs font-bold text-[#C23B22] hover:underline cursor-pointer"
-                      >
-                        {isEn ? 'Cancel' : 'रद्द करें'}
-                      </button>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-[#8A7F72] font-medium line-clamp-2">
-                    &ldquo;{rem.message}&rdquo;
-                  </p>
-
-                  <div className="text-[11px] font-semibold text-[#8A7F72] flex items-center justify-between border-t border-[#E9E2D6]/60 pt-2.5 mt-1">
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-[#E8731A]" />
-                      <span>
-                        {isEn ? 'Scheduled:' : 'समय:'} {sendAtStr}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-[#2B6CB0]" />
-                      <span>{rem.channel}</span>
-                    </span>
+            items.map((it) => (
+              <div
+                key={it.id}
+                className="glass-card p-4 flex items-center justify-between border border-white shadow-xs hover:shadow-md transition-all"
+              >
+                <div>
+                  <div className="font-bold text-base text-[#1F1B16]">{it.name || it.item || 'Stock Item'}</div>
+                  <div className="text-xs text-[#8A7F72] mt-0.5">
+                    {isEn ? 'Recorded requirement:' : 'दर्ज जरूरत:'} <span className="font-semibold text-[#1F1B16]">{it.quantityHint || it.qty || (isEn ? 'Low stock' : 'कम स्टॉक')}</span>
                   </div>
                 </div>
-              );
-            })
+
+                <div className="text-right">
+                  <div className="text-sm font-black text-[#C23B22]">
+                    {it.quantityHint || it.qty || ''}
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FBE6E1] text-[#C23B22] uppercase">
+                    {isEn ? 'Low Stock' : 'स्टॉक कम'}
+                  </span>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
