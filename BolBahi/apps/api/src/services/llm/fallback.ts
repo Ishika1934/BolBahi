@@ -29,6 +29,22 @@ export function fallbackParse(input: LLMInput): ParseResult {
   const lower = t.toLowerCase();
   const actions: Action[] = [];
 
+  // Helper to extract known customer from list
+  const findCustomer = (subtext: string): string | null => {
+    for (const c of input.customers) {
+      const firstName = c.split(' ')[0].toLowerCase();
+      if (subtext.toLowerCase().includes(firstName)) {
+        return c.split(' ')[0]; // return matched first name
+      }
+    }
+    // Fallback: check word before "ne" or "ko"
+    const m = subtext.match(/([a-zA-Z\u0900-\u097F]+)\s+(?:ne|ko|ka|ki)\b/i);
+    if (m && !['aaj', 'kal', 'parson', 'last', 'atta', 'chini'].includes(m[1].toLowerCase())) {
+      return m[1];
+    }
+    return null;
+  };
+
   // Check if answering a pending clarification question
   if (input.pendingQuestion) {
     for (const c of input.customers) {
@@ -44,9 +60,43 @@ export function fallbackParse(input: LLMInput): ParseResult {
     }
   }
 
+  // Check update customer phone: e.g. "Ramesh ka phone number 9876543210 kar do" or "update Ramesh phone to 9876543210"
+  const phoneMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*(?:phone|mobile|phone number|number)\s*(?:badal kar|badlo|to|kar do|likh do)?\s*([6-9]\d{9})/i)
+    || t.match(/(?:update|change)\s+(?:phone|mobile)\s+(?:of\s+)?([a-zA-Z\u0900-\u097F\s]+?)\s+(?:to\s+)?([6-9]\d{9})/i);
+  if (phoneMatch) {
+    const cust = findCustomer(phoneMatch[1]) || phoneMatch[1].trim();
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'update_customer',
+        customer: cust,
+        phone: phoneMatch[2].trim(),
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
+  // Check update customer email: e.g. "Ramesh ka email ramesh@gmail.com kar do"
+  const emailMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*email\s*(?:badal kar|badlo|to|kar do|likh do)?\s*([^\s@]+@[^\s@]+\.[^\s@]+)/i);
+  if (emailMatch) {
+    const cust = findCustomer(emailMatch[1]) || emailMatch[1].trim();
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'update_customer',
+        customer: cust,
+        email: emailMatch[2].trim(),
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
   // Check update_customer (correcting misheard name)
-  const renameMatch = t.match(/(?:change|update)\s+name\s+(?:of\s+)?([a-zA-Z\u0900-\u097F]+)\s+(?:to|kar do)\s+([a-zA-Z\u0900-\u097F\s]+)/i)
-    || t.match(/(?:naam\s+badal\s+kar|naam\s+badlo)\s+([a-zA-Z\u0900-\u097F]+)\s+(?:to|kar do)?\s*([a-zA-Z\u0900-\u097F\s]+)/i);
+  const renameMatch = t.match(/(?:change|update)\s+name\s+(?:of\s+)?([a-zA-Z\u0900-\u097F\s]+?)\s+(?:to|kar do)\s+([a-zA-Z\u0900-\u097F\s]+)/i)
+    || t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s+ka\s+naam\s+badal\s+kar\s+([a-zA-Z\u0900-\u097F\s]+)\s+kar\s+do/i)
+    || t.match(/(?:naam\s+badal\s+kar|naam\s+badlo)\s+([a-zA-Z\u0900-\u097F\s]+?)\s+(?:to|kar do)?\s*([a-zA-Z\u0900-\u097F\s]+)/i);
   if (renameMatch) {
     return {
       language: 'hinglish',
@@ -58,6 +108,98 @@ export function fallbackParse(input: LLMInput): ParseResult {
       confidence: 0.95,
       source: 'fallback',
     };
+  }
+
+  // Check query customer phone: e.g. "Ramesh ka phone number kya hai" or "what is Ramesh's phone"
+  const phoneQueryMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*(?:phone|mobile|phone number|number|mobile number)\s*(?:kya hai|batao|do|sunao|bol do|\?)/i)
+    || t.match(/(?:what is|tell me|get|show)\s+(?:the\s+)?(?:phone|mobile|phone number)\s+(?:of|for)?\s*([a-zA-Z\u0900-\u097F\s]+)/i);
+  if (phoneQueryMatch) {
+    const cust = findCustomer(phoneQueryMatch[1]) || phoneQueryMatch[1].trim();
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'query_customer_info',
+        customer: cust,
+        field: 'phone',
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
+  // Check query customer email: e.g. "Ramesh ka email kya hai" or "what is Ramesh's email"
+  const emailQueryMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*email\s*(?:id)?\s*(?:kya hai|batao|do|sunao|\?)/i)
+    || t.match(/(?:what is|tell me|get|show)\s+(?:the\s+)?email\s+(?:of|for)?\s*([a-zA-Z\u0900-\u097F\s]+)/i);
+  if (emailQueryMatch) {
+    const cust = findCustomer(emailQueryMatch[1]) || emailQueryMatch[1].trim();
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'query_customer_info',
+        customer: cust,
+        field: 'email',
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
+  // Check query customer contact details: e.g. "Ramesh ke contact details do" or "Ramesh ka contact batao"
+  const contactQueryMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ke|ki)?\s*(?:contact|details|sampark|contact details)\s*(?:batao|kya hai|do|\?)/i);
+  if (contactQueryMatch) {
+    const cust = findCustomer(contactQueryMatch[1]) || contactQueryMatch[1].trim();
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'query_customer_info',
+        customer: cust,
+        field: 'all',
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
+  // Check stating customer balance: e.g. "Ramesh ka balance 500 hai" or "Ramesh balance 500" or "Ramesh ka hisaab 500 hai"
+  const balanceStatementMatch = t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*(?:balance|hisaab)\s*(?:hai)?\s*([0-9]+)/i)
+    || t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s*(?:ka|ki)?\s*(?:balance|hisaab)\s*([0-9]+)\s*(?:rupaye|rs|hai)?/i)
+    || t.match(/([a-zA-Z\u0900-\u097F\s]+?)\s+par\s+([0-9]+)\s*(?:baaki|udhaar)/i);
+  if (balanceStatementMatch && !lower.includes('kitna') && !lower.includes('kya')) {
+    const cust = findCustomer(balanceStatementMatch[1]) || balanceStatementMatch[1].trim();
+    const amount = parseInt(balanceStatementMatch[2], 10);
+    return {
+      language: 'hinglish',
+      actions: [{
+        type: 'add_udhaar',
+        customer: cust,
+        amount,
+        note: 'Balance entry',
+      }],
+      confidence: 0.95,
+      source: 'fallback',
+    };
+  }
+
+  // Check direct stock quantity utterance: e.g. "10 kg cheeni" or "20 kg cheeni" or "5 packet biscuit"
+  const directStockMatch = t.match(/^(\d+(?:\.\d+)?)\s*(kilo|kg|packet|pkt|bori|bag|litre|liter|l|gram|gm|g)?\s+([a-zA-Z\u0900-\u097F\s]+)$/i)
+    || t.match(/^([a-zA-Z\u0900-\u097F\s]+?)\s+(\d+(?:\.\d+)?)\s*(kilo|kg|packet|pkt|bori|bag|litre|liter|l|gram|gm|g)?\s*(?:kam hai|khatam|mangwana|stock)?$/i);
+  if (directStockMatch) {
+    const isQtyFirst = !isNaN(parseFloat(directStockMatch[1]));
+    const item = isQtyFirst ? directStockMatch[3].trim() : directStockMatch[1].trim();
+    const qtyNum = isQtyFirst ? directStockMatch[1] : directStockMatch[2];
+    const qtyUnit = (isQtyFirst ? directStockMatch[2] : directStockMatch[3]) || 'kg';
+    if (!['aaj', 'kal', 'parson', 'last', 'undo'].includes(item.toLowerCase())) {
+      return {
+        language: 'hinglish',
+        actions: [{
+          type: 'add_low_stock',
+          item,
+          quantityHint: `${qtyNum} ${qtyUnit}`.trim(),
+        }],
+        confidence: 0.95,
+        source: 'fallback',
+      };
+    }
   }
 
   // 1. Undo
@@ -186,22 +328,6 @@ export function fallbackParse(input: LLMInput): ParseResult {
     };
   }
 
-  // Helper to extract known customer from list
-  const findCustomer = (subtext: string): string | null => {
-    for (const c of input.customers) {
-      const firstName = c.split(' ')[0].toLowerCase();
-      if (subtext.toLowerCase().includes(firstName)) {
-        return c.split(' ')[0]; // return matched first name
-      }
-    }
-    // Fallback: check word before "ne" or "ko"
-    const m = subtext.match(/([a-zA-Z\u0900-\u097F]+)\s+(?:ne|ko|ka|ki)\b/i);
-    if (m && !['aaj', 'kal', 'parson', 'last', 'atta', 'chini'].includes(m[1].toLowerCase())) {
-      return m[1];
-    }
-    return null;
-  };
-
   // 3. Multi-intent demo sentence special split (comma, 'aur', 'and')
   const clauses = t.split(/[,;\n]|(?:\baur\b)/i).map((c) => c.trim()).filter(Boolean);
 
@@ -239,8 +365,7 @@ export function fallbackParse(input: LLMInput): ParseResult {
       clLower.includes('yaad dila') ||
       clLower.includes('reminder') ||
       clLower.includes('bhej do') ||
-      clLower.includes('tagada') ||
-      clLower.includes('phone number')
+      clLower.includes('tagada')
     ) {
       const cust = findCustomer(clause);
       let when = 'now';
