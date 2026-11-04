@@ -28,14 +28,27 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
 
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
 
   const fetchReminders = async () => {
     setLoading(true);
     const res = await apiFetch<ReminderItem[]>('/api/reminders');
-    if (res.ok) {
+    if (res.ok && Array.isArray(res.data)) {
       setReminders(res.data);
     }
     setLoading(false);
+  };
+
+  const handleSeedDemoData = async () => {
+    setSeeding(true);
+    try {
+      const res = await apiFetch('/api/demo/seed', { method: 'POST' });
+      if (res.ok) {
+        await fetchReminders();
+      }
+    } finally {
+      setSeeding(false);
+    }
   };
 
   useEffect(() => {
@@ -112,11 +125,19 @@ export function RemindersPanel({ onClose }: RemindersPanelProps) {
               <p className="font-bold text-base text-[#1F1B16]">
                 {isEn ? 'No reminders scheduled.' : 'कोई रिमाइंडर निर्धारित नहीं है।'}
               </p>
-              <p className="text-xs mt-1 text-[#8A7F72]">
+              <p className="text-xs mt-1 mb-4 text-[#8A7F72]">
                 {isEn
-                  ? 'Speak: "Remind Ramesh tomorrow" to set a reminder'
-                  : 'बोलें: "कल रमेश को याद दिला देना"'}
+                  ? 'Speak: "Remind Ramesh tomorrow" or load sample kirana reminders'
+                  : 'बोलें: "कल रमेश को याद दिला देना" या सैंपल रिमाइंडर लोड करें'}
               </p>
+              <button
+                type="button"
+                onClick={handleSeedDemoData}
+                disabled={seeding}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E8731A] text-white text-xs font-bold shadow-md hover:bg-[#d66512] active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span>{seeding ? (isEn ? 'Loading sample data...' : 'डेटा लोड हो रहा है...') : (isEn ? '⚡ Load Sample Kirana Data' : '⚡ सैंपल किराना डेटा लोड करें')}</span>
+              </button>
             </div>
           ) : (
             reminders.map((rem) => {
