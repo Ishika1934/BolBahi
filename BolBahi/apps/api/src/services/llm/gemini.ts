@@ -35,13 +35,14 @@ const recordActionsDecl: FunctionDeclaration = {
                 'set_reminder',
                 'add_low_stock',
                 'query_balance',
+                'query_customer_info',
                 'daily_summary',
                 'undo_last',
                 'clarify',
                 'update_customer',
                 'show_view',
               ],
-              description: 'Exact action type: add_udhaar, add_payment, set_reminder, add_low_stock, query_balance, daily_summary, undo_last, clarify, update_customer, show_view',
+              description: 'Exact action type: add_udhaar, add_payment, set_reminder, add_low_stock, query_balance, query_customer_info, daily_summary, undo_last, clarify, update_customer, show_view',
             },
             view: {
               type: Type.STRING,
@@ -49,7 +50,14 @@ const recordActionsDecl: FunctionDeclaration = {
               description: 'View or screen to display: stock, reminders, customers, records, commands, hisaab, settings',
             },
             customer: { type: Type.STRING, description: 'Customer name or match from known list' },
+            field: {
+              type: Type.STRING,
+              enum: ['phone', 'email', 'all'],
+              description: 'Field to query: phone, email, or all for contact details',
+            },
             newName: { type: Type.STRING, description: 'New name when updating or renaming a customer' },
+            phone: { type: Type.STRING, description: 'Phone number when updating customer phone' },
+            email: { type: Type.STRING, description: 'Email address when updating customer email' },
             amount: { type: Type.NUMBER, description: 'Amount in INR' },
             note: { type: Type.STRING, description: 'Optional note or item details' },
             when: { type: Type.STRING, description: 'When to remind, e.g. now, kal, 2026-11-05T09:00:00+05:30' },
@@ -108,12 +116,21 @@ Extract EVERY separate action in the utterance in spoken order and call record_a
 
 Rules:
 - 'udhaar liya / diya / likh do / khate me' => add_udhaar (customer, amount).
+- Stating customer balance: e.g. '[customer] ka balance [amount] hai' or '[customer] par [amount] baaki' => add_udhaar (customer, amount). If [customer] is not in KNOWN_CUSTOMERS, BolBahi creates them automatically with this balance.
 - 'wapas diye / jama / payment / de diye' => add_payment (customer, amount).
-- 'kam hai / mangwana hai / stock' => add_low_stock (item, quantityHint).
+- 'kam hai / mangwana hai / stock' or direct quantity + item (e.g. "10 kg cheeni", "20 kg cheeni", "5 packet biscuit") => add_low_stock (item, quantityHint). The system automatically adds and merges quantities for the same or similar goods (e.g. 10 kg + 20 kg = 30 kg).
 - 'yaad dila dena / reminder / tagada' => set_reminder (customer, when, message).
-- 'kitna baaki hai / balance' => query_balance (customer).
+- 'kitna baaki hai / balance / hisaab kya hai' => query_balance (customer). If [customer] is not in KNOWN_CUSTOMERS, BolBahi creates that customer with ₹0 balance.
+- 'phone number kya hai / mobile number batao / contact details / email kya hai / number do' => query_customer_info (customer, field: 'phone' | 'email' | 'all').
+  * e.g. "Ramesh ka phone number kya hai?" => query_customer_info(customer: "Ramesh", field: "phone")
+  * e.g. "Suresh ka email batao" => query_customer_info(customer: "Suresh", field: "email")
+  * e.g. "Sharma ji ke contact details do" => query_customer_info(customer: "Sharma ji", field: "all")
 - 'aaj ka hisaab / din bhar ka' => daily_summary.
 - 'hata do / undo / galat ho gaya' => undo_last.
+- 'naam badal kar / phone number badal kar / phone number likho / update customer / change phone / change name' => update_customer (customer, newName?, phone?, email?).
+  * e.g. "Ramesh ka phone number 9876543210 kar do" => update_customer(customer: "Ramesh", phone: "9876543210")
+  * e.g. "Suresh ka email suresh@kirana.com likh do" => update_customer(customer: "Suresh", email: "suresh@kirana.com")
+  * e.g. "Ramesh ka naam badal kar Ramesh Kumar kar do" => update_customer(customer: "Ramesh", newName: "Ramesh Kumar")
 - If user asks to show, open, display or view any screen or tab:
   * 'stock / stock alerts / kam stock dikhao / show stock / show low stock' => show_view (view: 'stock').
   * 'reminders / tagada / pending reminders dikhao / show reminders' => show_view (view: 'reminders').
