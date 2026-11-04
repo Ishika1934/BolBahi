@@ -32,6 +32,12 @@ export const queryBalanceSchema = z.object({
   customer: z.string().min(1).max(60),
 });
 
+export const queryCustomerInfoSchema = z.object({
+  type: z.literal('query_customer_info'),
+  customer: z.string().min(1).max(60),
+  field: z.enum(['phone', 'email', 'all']).default('all'),
+});
+
 export const dailySummarySchema = z.object({
   type: z.literal('daily_summary'),
 });
@@ -49,7 +55,7 @@ export const clarifySchema = z.object({
 export const updateCustomerSchema = z.object({
   type: z.literal('update_customer'),
   customer: z.string().min(1).max(60), // old / current name
-  newName: z.string().min(1).max(60),   // new name to change to
+  newName: z.string().max(60).optional(), // new name if renaming
   phone: z.string().max(20).optional(),
   email: z.string().max(100).optional(),
 });
@@ -65,6 +71,7 @@ export const singleActionSchema = z.discriminatedUnion('type', [
   setReminderSchema,
   addLowStockSchema,
   queryBalanceSchema,
+  queryCustomerInfoSchema,
   dailySummarySchema,
   undoLastSchema,
   clarifySchema,
@@ -81,6 +88,7 @@ export const rawActionInputSchema = z.object({
     'set_reminder',
     'add_low_stock',
     'query_balance',
+    'query_customer_info',
     'daily_summary',
     'undo_last',
     'clarify',
@@ -90,6 +98,9 @@ export const rawActionInputSchema = z.object({
   view: z.enum(['stock', 'reminders', 'customers', 'records', 'commands', 'hisaab', 'settings']).optional(),
   customer: z.string().optional(),
   newName: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  field: z.enum(['phone', 'email', 'all']).optional(),
   amount: z.coerce.number().optional(),
   note: z.string().optional(),
   when: z.string().optional(),
