@@ -25,16 +25,32 @@ export function RecordsPanel({ onClose }: RecordsPanelProps) {
 
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'udhaar' | 'payment'>('all');
   const [search, setSearch] = useState('');
 
   const fetchRecords = async () => {
     setLoading(true);
-    const res = await apiFetch<LedgerRecord[]>('/api/records');
-    if (res.ok) {
+    let res = await apiFetch<LedgerRecord[]>('/api/entries');
+    if (!res.ok || !Array.isArray(res.data)) {
+      res = await apiFetch<LedgerRecord[]>('/api/records');
+    }
+    if (res.ok && Array.isArray(res.data)) {
       setRecords(res.data);
     }
     setLoading(false);
+  };
+
+  const handleSeedDemoData = async () => {
+    setSeeding(true);
+    try {
+      const res = await apiFetch('/api/demo/seed', { method: 'POST' });
+      if (res.ok) {
+        await fetchRecords();
+      }
+    } finally {
+      setSeeding(false);
+    }
   };
 
   useEffect(() => {
@@ -143,9 +159,17 @@ export function RecordsPanel({ onClose }: RecordsPanelProps) {
               <p className="font-bold text-base text-[#1F1B16]">
                 {isEn ? 'No ledger records found.' : 'कोई प्रविष्टि नहीं मिली।'}
               </p>
-              <p className="text-xs mt-1">
-                {isEn ? 'Speak a voice command to record credit or cash' : 'उधार या जमा दर्ज करने के लिए बोलें'}
+              <p className="text-xs mt-1 mb-4">
+                {isEn ? 'Speak a voice command or load sample kirana records' : 'उधार या जमा दर्ज करने के लिए बोलें या सैंपल रिकॉर्ड लोड करें'}
               </p>
+              <button
+                type="button"
+                onClick={handleSeedDemoData}
+                disabled={seeding}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#E8731A] text-white text-xs font-bold shadow-md hover:bg-[#d66512] active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span>{seeding ? (isEn ? 'Loading sample data...' : 'डेटा लोड हो रहा है...') : (isEn ? '⚡ Load Sample Kirana Data' : '⚡ सैंपल किराना डेटा लोड करें')}</span>
+              </button>
             </div>
           ) : (
             filtered.map((record) => {
