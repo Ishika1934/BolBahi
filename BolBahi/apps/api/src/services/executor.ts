@@ -258,10 +258,9 @@ export async function executeSetReminder(
     groupId,
   });
 
-  emitShopEvent(shopId, {
-    type: 'reminder.dispatched',
-    shopId,
-    data: { reminderId: reminder._id.toString(), customerId: customer._id.toString() },
+  emitShopEvent(shopId, 'reminder.dispatched', {
+    reminderId: reminder._id.toString(),
+    customerId: customer._id.toString(),
   });
 
   const whenLabel = isImmediate ? 'abhi' : action.when;
@@ -384,10 +383,8 @@ export async function executeUpdateCustomer(
   if (action.email) customer.email = action.email.trim();
   await customer.save();
 
-  emitShopEvent(shopId, {
-    type: 'ledger.updated',
-    shopId,
-    data: { customerId: customer._id.toString() },
+  emitShopEvent(shopId, 'ledger.updated', {
+    customerId: customer._id.toString(),
   });
 
   const replyScreen =
@@ -457,10 +454,15 @@ export async function executeShowView(
       break;
     }
     case 'reminders': {
-      const pendingReminders = await Reminder.find({ shopId: sId, status: 'pending' }).sort({ sendAt: 1 });
+      const pendingReminders = await Reminder.find({ shopId: sId, status: 'pending' })
+        .populate<{ customerId: { name: string } }>('customerId')
+        .sort({ sendAt: 1 });
       const count = pendingReminders.length;
       if (count > 0) {
-        const names = pendingReminders.slice(0, 3).map((r) => r.customerName).join(', ');
+        const names = pendingReminders
+          .slice(0, 3)
+          .map((r) => (r.customerId as any)?.name || 'Customer')
+          .join(', ');
         replyScreen = isEn
           ? `Opening Reminders. You have ${count} pending reminder(s) for ${names}.`
           : `तगादा रिमाइंडर खोल रहे हैं। ${count} तगादे बाकी हैं: ${names} के लिए।`;
